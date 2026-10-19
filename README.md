@@ -1,7 +1,6 @@
 # ACC Controller on Infineon AURIX TC387
 
-> Modern Control course · Infineon × Kookmin Univ. ACC Development Competition · 2025.09 – 2025.12 · 3-person team
-> **4th place out of 14 teams**
+> Modern Control course · Infineon × Kookmin Univ. ACC Development Competition · 2025.09 – 2025.12
 
 An Adaptive Cruise Control (ACC) logic designed in MATLAB/Simulink, auto-generated into C code and deployed on an Infineon AURIX TC387. The controller is verified step by step from MIL (Model-in-the-Loop) to PIL (Processor-in-the-Loop) against a PreScan virtual vehicle.
 
@@ -68,8 +67,4 @@ flowchart LR
 
 - Steady-state error of ACC **below 13%**
 - Stable re-convergence after sensor loss in corners with NSCC, compared with PID only
-- 4th place out of 14 teams
 
----
-
-> Competition source code will be added after cleanup.
