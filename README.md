@@ -1,42 +1,75 @@
-# AURIX TC387 ACC 개발대회
+# ACC Controller on Infineon AURIX TC387
 
-> 3학년 현대제어 수업 · Infineon ACC 개발대회 · 3인 팀 · **14개 팀 중 4등**
->
-> 담당: Simulink C 코드 생성, AURIX TC387 보드 실장, 성능 검증
+> Modern Control course · Infineon × Kookmin Univ. ACC Development Competition · 2025.09 – 2025.12 · 3-person team
+> **4th place out of 14 teams**
 
----
-
-## 프로젝트 개요
-
-MATLAB Simulink로 설계한 ACC(Adaptive Cruise Control) 제어 로직을 C 코드로 생성해 Infineon AURIX TC387 보드에 실장하고,
-MIL → PIL 단계로 검증(Prescan 시뮬레이션)한 프로젝트입니다.
-
-- **Tools**: MATLAB / Simulink, Prescan
-- **Target**: Infineon AURIX TC387 (TriCore)
+An Adaptive Cruise Control (ACC) logic designed in MATLAB/Simulink, auto-generated into C code and deployed on an Infineon AURIX TC387. The controller is verified step by step from MIL (Model-in-the-Loop) to PIL (Processor-in-the-Loop) against a PreScan virtual vehicle.
 
 ---
 
-## 1. MIL–PIL 불일치 해결
+## System Architecture
 
-MIL에서는 정상이던 로직이 PIL(Prescan 시뮬레이션)에서는 의도한 시점에 동작하지 않는 지연 문제가 발생했습니다.
+```mermaid
+flowchart LR
+    A["PC · PreScan<br/>virtual road, vehicle,<br/>range sensor"] -- "sensor data (TCP/IP)" --> B["AURIX TC387<br/>ACC control code<br/>(Embedded Coder C)"]
+    B -- "throttle / brake (TCP/IP)" --> C["PC · PreScan<br/>virtual vehicle driving"]
+```
 
-| 단계 | 한 일 | 확인한 것 |
-|---|---|---|
-| MIL | Matlab Scope로 데이터를 구간별로 관측 | 제어 로직 자체에는 이상 없음 |
-| PIL | STM 타이머로 수신·송신 실행 시간 측정 | 지연이 타깃 HW 실행 구간에서 발생 |
-| 원인 분석 | 메모리 정렬 가설 → User Manual 확인 후 배제. 이후 Application Notes를 참고해 지연 요소를 하나씩 소거 | **TC387 FPU는 단정밀도만 지원** → `double` 연산이 SW 에뮬레이션으로 처리되며 오버헤드 발생 |
-| 해결 | 변수 자료형을 `double` → `float`로 변경 | 정상 동작 확보 |
+| Item | Detail |
+|---|---|
+| Modeling | MATLAB / Simulink |
+| Code generation | Embedded Coder (Simulink → C) |
+| Target MCU | Infineon AURIX TC387 (TriCore) |
+| Simulation | PreScan (vehicle, road, sensors) |
+| Interface | Ethernet TCP/IP between PreScan and TC387 |
+| Timing | STM (System Timer) based execution time measurement |
 
-**결과**: ACC 정적 상태 오차 **13% 미만** 달성
+<p align="center">
+  <img src="docs/simulink_acc_model.png" width="760" alt="Simulink ACC model block diagram">
+  <br><sub>Simulink ACC model: sensor input → MPC / NSCC control blocks → throttle / brake output</sub>
+</p>
 
 ---
 
-## 2. 맵 데이터 기반 NSCC 제안
+## Control Algorithms
 
-- **문제**: 코너 구간에서 거리 센서값이 유실되어 목표 거리가 벌어졌습니다.
-- **해결**: 3주간 Simulink의 센서 데이터를 하나씩 확인해 맵 데이터를 활용할 수 있다는 점을 찾았고, 현업에서 **NSCC**(Navigation-based Smart Cruise Control)라는 이름으로 쓰이는 방식임을 확인해 제안했습니다.
-- **결과**: NSCC 로직의 독창성을 인정받아 **14개 팀 중 4등**을 기록했습니다.
+### MPC (Model Predictive Control)
+- Predicts relative distance and speed to the preceding vehicle over a horizon and minimizes a cost function.
+- Maximum speed constraint included; solved as a QP with the KWIK solver.
+
+### PID
+- Initial controller and performance baseline for MPC.
+
+### NSCC (Navigation-based Smart Cruise Control, rule-based)
+- In corners, the range sensor can lose the preceding vehicle.
+- The target speed is adjusted from the map curvature so the gap is kept while the sensor is lost.
 
 ---
 
-> 대회 제출 코드는 정리한 뒤 추가할 예정입니다.
+## Verification Flow (MIL → PIL)
+
+| Stage | Method |
+|---|---|
+| MIL | Simulink model with PreScan; signals observed with Scope per section |
+| Code generation | Embedded Coder C code built for TC387 |
+| PIL | Generated code on TC387 in the loop with PreScan; RX/TX execution time measured with STM |
+
+**Design note**: The TC387 FPU supports single precision only. `double` arithmetic falls back to software emulation, so the computation and communication interface types are implemented in `float`.
+
+---
+
+## Results
+
+<p align="center">
+  <img src="docs/prescan_scenario.jpg" width="380" alt="PreScan driving scenario">
+  <img src="docs/distance_tracking_mpc.png" width="380" alt="Relative distance tracking with PID and MPC">
+  <br><sub>Left: PreScan scenario with curved sections · Right: relative distance tracking (PID + MPC)</sub>
+</p>
+
+- Steady-state error of ACC **below 13%**
+- Stable re-convergence after sensor loss in corners with NSCC, compared with PID only
+- 4th place out of 14 teams
+
+---
+
+> Competition source code will be added after cleanup.
